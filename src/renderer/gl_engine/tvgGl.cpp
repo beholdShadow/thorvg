@@ -22,6 +22,7 @@
 
 #include "tvgGl.h"
 #include "tvgCommon.h"
+#include <cstdio>
 
 #ifdef __EMSCRIPTEN__
 
@@ -810,9 +811,34 @@ bool glInit()
     GL_FUNCTION_FETCH(glUniformBlockBinding, PFNGLUNIFORMBLOCKBINDINGPROC);
 
     //Confirm the version
-    GLint vMajor, vMinor;
+    GLint vMajor = 0, vMinor = 0;
     glGetIntegerv(GL_MAJOR_VERSION, &vMajor);
     glGetIntegerv(GL_MINOR_VERSION, &vMinor);
+
+    // Fallback: If glGetIntegerv returns 0 (e.g., on macOS with compatibility context or older OpenGL),
+    // parse the version string from glGetString(GL_VERSION)
+    if (vMajor == 0 && vMinor == 0) {
+        const char* versionStr = (const char*)glGetString(GL_VERSION);
+        if (versionStr) {
+            // Try to parse "X.Y" format (e.g., "4.1" or "4.1.0")
+            if (sscanf(versionStr, "%d.%d", &vMajor, &vMinor) != 2) {
+                // Try to parse "OpenGL ES X.Y" format
+                if (strstr(versionStr, "OpenGL ES")) {
+                    if (sscanf(versionStr, "OpenGL ES %d.%d", &vMajor, &vMinor) != 2) {
+                        TVGERR("GL_ENGINE", "Failed to parse OpenGL/ES version string: %s", versionStr);
+                        return false;
+                    }
+                } else {
+                    TVGERR("GL_ENGINE", "Failed to parse OpenGL version string: %s", versionStr);
+                    return false;
+                }
+            }
+        } else {
+            TVGERR("GL_ENGINE", "Failed to get OpenGL/ES version string.");
+            return false;
+        }
+    }
+
     if (vMajor < TVG_REQUIRE_GL_MAJOR_VER || (vMajor ==  TVG_REQUIRE_GL_MAJOR_VER && vMinor <  TVG_REQUIRE_GL_MINOR_VER)) {
         TVGERR("GL_ENGINE", "OpenGL/ES version is not satisfied. Current: v%d.%d, Required: v%d.%d", vMajor, vMinor, TVG_REQUIRE_GL_MAJOR_VER, TVG_REQUIRE_GL_MINOR_VER);
         return false;
