@@ -321,6 +321,38 @@ static Paint* _applyComposition(SvgLoaderData& loaderData, Paint* paint, const S
 }
 
 
+static bool _processStdDevAndBox(SvgLoaderData& loaderData, float stdDevX, float stdDevY, bool hasBox, const Box& box, const bool* isPercentage, const Box& bbox, bool primitiveUserSpace, float sx, float sy, Box& clipBox, float& sigma, int& direction)
+{
+    direction = stdDevX > 0.0f ? (stdDevY > 0.0f ? 0 : 1) : (stdDevY > 0.0f ? 2 : -1);
+    if (direction == -1) return false;
+
+    if (hasBox) {
+        auto filterBox = box;
+        if (primitiveUserSpace) {
+            if (isPercentage[0]) filterBox.x *= loaderData.svgParse->global.w;
+            if (isPercentage[1]) filterBox.y *= loaderData.svgParse->global.h;
+            if (isPercentage[2]) filterBox.w *= loaderData.svgParse->global.w;
+            if (isPercentage[3]) filterBox.h *= loaderData.svgParse->global.h;
+        } else {
+            stdDevX *= bbox.w;
+            stdDevY *= bbox.h;
+            if (isPercentage[0]) filterBox.x = bbox.x + box.x * bbox.w;
+            if (isPercentage[1]) filterBox.y = bbox.y + box.y * bbox.h;
+            if (isPercentage[2]) filterBox.w *= bbox.w;
+            if (isPercentage[3]) filterBox.h *= bbox.h;
+        }
+        clipBox.intersect(filterBox);
+    } else if (!primitiveUserSpace) {
+        stdDevX *= bbox.w;
+        stdDevY *= bbox.h;
+    }
+
+    sigma = 1.25f * (direction == 2 ? stdDevY * sy : stdDevX * sx);
+    if (sigma < 0.0f) sigma = 0.0f;
+    return true;
+}
+
+
 static Paint* _applyFilter(SvgLoaderData& loaderData, Paint* paint, const SvgNode* node, const Box& vBox, const string& svgPath)
 {
     auto filterNode = node->style->filter.node;
@@ -340,33 +372,40 @@ static Paint* _applyFilter(SvgLoaderData& loaderData, Paint* paint, const SvgNod
         if ((*child)->type == SvgNodeType::GaussianBlur) {
             auto& gauss = (*child)->node.gaussianBlur;
 
-            auto direction = gauss.stdDevX > 0.0f ? (gauss.stdDevY > 0.0f ? 0 : 1) : (gauss.stdDevY > 0.0f ? 2 : -1);
-            if (direction == -1) continue;
+            float sigma;
+            int direction;
+            if (!_processStdDevAndBox(loaderData, gauss.stdDevX, gauss.stdDevY, gauss.hasBox, gauss.box, gauss.isPercentage, bbox, primitiveUserSpace, sx, sy, clipBox, sigma, direction)) continue;
 
-            auto stdDevX = gauss.stdDevX;
-            auto stdDevY = gauss.stdDevY;
-            if (gauss.hasBox) {
-                auto gaussBox = gauss.box;
-                auto isPercent = gauss.isPercentage;
-                if (primitiveUserSpace) {
-                    if (isPercent[0]) gaussBox.x *= loaderData.svgParse->global.w;
-                    if (isPercent[1]) gaussBox.y *= loaderData.svgParse->global.h;
-                    if (isPercent[2]) gaussBox.w *= loaderData.svgParse->global.w;
-                    if (isPercent[3]) gaussBox.h *= loaderData.svgParse->global.h;
-                } else {
-                    stdDevX *= bbox.w;
-                    stdDevY *= bbox.h;
-                    if (isPercent[0]) gaussBox.x = bbox.x + gauss.box.x * bbox.w;
-                    if (isPercent[1]) gaussBox.y = bbox.y + gauss.box.y * bbox.h;
-                    if (isPercent[2]) gaussBox.w *= bbox.w;
-                    if (isPercent[3]) gaussBox.h *= bbox.h;
-                }
-                clipBox.intersect(gaussBox);
-            } else if (!primitiveUserSpace) {
-                stdDevX *= bbox.w;
-                stdDevY *= bbox.h;
+            scene->push(SceneEffect::GaussianBlur, (double)sigma, direction, gauss.edgeModeWrap, 55);
+        } else if ((*child)->type == SvgNodeType::DropShadow) {
+            auto& dropShadow = (*child)->node.dropShadow;
+
+            auto dx = dropShadow.dx * sx;
+            auto dy = dropShadow.dy * sy;
+            auto stdDevX = dropShadow.stdDevX;
+            auto stdDevY = dropShadow.stdDevY;
+
+            // Convert from object bounding box units to pixels if needed
+            if (!primitiveUserSpace) {
+                dx *= bbox.w;
+                dy *= bbox.h;
             }
-            scene->push(SceneEffect::GaussianBlur, (double)(1.25f * (direction == 2 ? stdDevY * sy : stdDevX * sx)), direction, gauss.edgeModeWrap, 55);
+
+            // Calculate angle and distance from dx, dy
+            auto distance = std::sqrt(dx * dx + dy * dy);
+            auto angle = std::atan2(dy, dx) * 180.0 / 3.14159265358979323846; // Convert to degrees
+
+            float sigma;
+            int direction;
+            if (!_processStdDevAndBox(loaderData, stdDevX, stdDevY, dropShadow.hasBox, dropShadow.box, dropShadow.isPercentage, bbox, primitiveUserSpace, sx, sy, clipBox, sigma, direction)) continue;
+
+            // Convert color and opacity
+            auto r = dropShadow.color.r;
+            auto g = dropShadow.color.g;
+            auto b = dropShadow.color.b;
+            auto a = (uint8_t)(dropShadow.opacity * 255.0f);
+
+            scene->push(SceneEffect::DropShadow, r, g, b, a, (double)angle, (double)distance, (double)sigma, 55);
         }
     }
 

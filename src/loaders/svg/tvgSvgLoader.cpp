@@ -1375,6 +1375,36 @@ static bool _attrParseGaussianBlurNode(void* data, const char* key, const char* 
 }
 
 
+static bool _attrParseDropShadowNode(void* data, const char* key, const char* value)
+{
+    SvgLoaderData* loader = (SvgLoaderData*)data;
+    SvgNode* node = loader->svgParse->node;
+    SvgDropShadowNode* dropShadow = &node->node.dropShadow;
+
+    if (_parseBox(key, value, &dropShadow->box, dropShadow->isPercentage)) dropShadow->hasBox = true;
+
+    if (STR_AS(key, "id")) {
+        if (node->id && value) tvg::free(node->id);
+        node->id = _copyId(value);
+    } else if (STR_AS(key, "dx")) {
+        dropShadow->dx = _toFloat(loader->svgParse, value, SvgParserLengthType::Horizontal);
+    } else if (STR_AS(key, "dy")) {
+        dropShadow->dy = _toFloat(loader->svgParse, value, SvgParserLengthType::Vertical);
+    } else if (STR_AS(key, "stdDeviation")) {
+        _parseGaussianBlurStdDeviation(&value, &dropShadow->stdDevX, &dropShadow->stdDevY);
+    } else if (STR_AS(key, "flood-color")) {
+        _toColor(value, dropShadow->color.r, dropShadow->color.g, dropShadow->color.b, nullptr);
+    } else if (STR_AS(key, "flood-opacity")) {
+        dropShadow->opacity = toFloat(value, nullptr);
+        if (dropShadow->opacity < 0.0f) dropShadow->opacity = 0.0f;
+        if (dropShadow->opacity > 1.0f) dropShadow->opacity = 1.0f;
+    } else {
+        return _parseStyleAttr(loader, key, value, false);
+    }
+    return true;
+}
+
+
 static SvgNode* _createNode(SvgNode* parent, SvgNodeType type)
 {
     SvgNode* node = tvg::calloc<SvgNode>(1, sizeof(SvgNode));
@@ -1507,6 +1537,29 @@ static SvgNode* _createGaussianBlurNode(SvgLoaderData* loader, SvgNode* parent, 
     loader->svgParse->node->node.gaussianBlur.box = {0.0f, 0.0f, 1.0f, 1.0f};
 
     func(buf, bufLength, _attrParseGaussianBlurNode, loader);
+
+    return loader->svgParse->node;
+}
+
+
+static SvgNode* _createDropShadowNode(SvgLoaderData* loader, SvgNode* parent, const char* buf, unsigned bufLength, parseAttributes func)
+{
+    loader->svgParse->node = _createNode(parent, SvgNodeType::DropShadow);
+    if (!loader->svgParse->node) return nullptr;
+
+    loader->svgParse->node->style->display = false;
+    SvgDropShadowNode* dropShadow = &loader->svgParse->node->node.dropShadow;
+    dropShadow->box = {0.0f, 0.0f, 1.0f, 1.0f};
+    dropShadow->dx = 2.0f;
+    dropShadow->dy = 2.0f;
+    dropShadow->stdDevX = 2.0f;
+    dropShadow->stdDevY = 2.0f;
+    dropShadow->color.r = 0;
+    dropShadow->color.g = 0;
+    dropShadow->color.b = 0;
+    dropShadow->opacity = 1.0f;
+
+    func(buf, bufLength, _attrParseDropShadowNode, loader);
 
     return loader->svgParse->node;
 }
@@ -2246,7 +2299,8 @@ static constexpr struct
     {"line", sizeof("line"), _createLineNode},
     {"image", sizeof("image"), _createImageNode},
     {"text", sizeof("text"), _createTextNode},
-    {"feGaussianBlur", sizeof("feGaussianBlur"), _createGaussianBlurNode}
+    {"feGaussianBlur", sizeof("feGaussianBlur"), _createGaussianBlurNode},
+    {"feDropShadow", sizeof("feDropShadow"), _createDropShadowNode}
 };
 
 

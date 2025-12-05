@@ -21,7 +21,7 @@
  */
 
 #include <memory.h>
-#include <webp/decode.h>
+#include <libwebp/src/webp/decode.h>
 
 #include "tvgWebpLoader.h"
 
@@ -33,7 +33,7 @@
 void WebpLoader::run(unsigned tid)
 {
     //TODO: acquire the current colorspace format & pre-multiplied alpha image.
-    surface.buf8 = WebPDecodeBGRA(data, size, nullptr, nullptr);
+    surface.buf8 = of_WebPDecodeBGRA(data, size, nullptr, nullptr);
     surface.stride = (uint32_t)w;
     surface.w = (uint32_t)w;
     surface.h = (uint32_t)h;
@@ -61,7 +61,7 @@ WebpLoader::~WebpLoader()
     data = nullptr;
     size = 0;
     freeData = false;
-    WebPFree(surface.buf8);
+    of_WebPFree(surface.buf8);
 }
 
 
@@ -71,7 +71,7 @@ bool WebpLoader::open(const char* path)
     if (!(data = (unsigned char*)LoadModule::open(path, size))) return false;
 
     int width, height;
-    if (!WebPGetInfo(data, size, &width, &height)) return false;
+    if (!of_WebPGetInfo(data, size, &width, &height)) return false;
     w = static_cast<float>(width);
     h = static_cast<float>(height);
     freeData = true;
@@ -95,7 +95,7 @@ bool WebpLoader::open(const char* data, uint32_t size, TVG_UNUSED const char* rp
     }
 
     int width, height;
-    if (!WebPGetInfo(this->data, size, &width, &height)) return false;
+    if (!of_WebPGetInfo(this->data, size, &width, &height)) return false;
 
     w = static_cast<float>(width);
     h = static_cast<float>(height);

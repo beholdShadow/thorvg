@@ -61,7 +61,7 @@ struct Paint::Impl
     struct {
         Matrix m;                 //input matrix
         float degree;             //rotation degree
-        float scale;              //scale factor
+        Point scale;              //scale factor
         bool overriding;          //user transform?
 
         void update()
@@ -74,7 +74,7 @@ struct Paint::Impl
             m.e31 = 0.0f;
             m.e32 = 0.0f;
             m.e33 = 1.0f;
-            tvg::scale(&m, {scale, scale});
+            tvg::scale(&m, scale);
             tvg::rotate(&m, degree);
         }
     } tr;
@@ -247,7 +247,7 @@ struct Paint::Impl
 
         tvg::identity(&tr.m);
         tr.degree = 0.0f;
-        tr.scale = 1.0f;
+        tr.scale = {1.0f, 1.0f};
         tr.overriding = false;
 
         parent = nullptr;
@@ -271,10 +271,19 @@ struct Paint::Impl
     bool scale(float factor)
     {
         if (tr.overriding) return false;
-        if (tvg::equal(factor, tr.scale)) return true;
-        tr.scale = factor;
+        if (tvg::equal(factor, tr.scale.x) && tvg::equal(factor, tr.scale.y)) return true;
+        tr.scale = {factor, factor};
         mark(RenderUpdateFlag::Transform);
 
+        return true;
+    }
+
+    bool scale(float x, float y)
+    {
+        if (tr.overriding) return false;
+        if (tvg::equal(x, tr.scale.x) && tvg::equal(y, tr.scale.y)) return true;
+        tr.scale = {x, y};
+        mark(RenderUpdateFlag::Transform);
         return true;
     }
 

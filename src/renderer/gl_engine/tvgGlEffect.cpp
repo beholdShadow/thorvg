@@ -69,8 +69,8 @@ void GlEffect::update(RenderEffectGaussianBlur* effect, const Matrix& transform)
 
 GlRenderTask* GlEffect::render(RenderEffectGaussianBlur* effect, GlRenderTarget* dstFbo, Array<GlRenderTargetPool*>& blendPool, const RenderRegion& vp, uint32_t voffset, uint32_t ioffset)
 {
-    if (!pBlurV) pBlurV = new GlProgram(EFFECT_VERTEX, GAUSSIAN_VERTICAL);
-    if (!pBlurH) pBlurH = new GlProgram(EFFECT_VERTEX, GAUSSIAN_HORIZONTAL);
+    if (!pBlurV) pBlurV = new GlProgram(GAUSSIAN_BLUR_VERTEX, GAUSSIAN_VERTICAL);
+    if (!pBlurH) pBlurH = new GlProgram(GAUSSIAN_BLUR_VERTEX, GAUSSIAN_HORIZONTAL);
 
     // get current and intermidiate framebuffers
     auto dstCopyFbo0 = blendPool[0]->getRenderTarget(vp);
@@ -148,8 +148,8 @@ void GlEffect::update(RenderEffectDropShadow* effect, const Matrix& transform)
 
 GlRenderTask* GlEffect::render(RenderEffectDropShadow* effect, GlRenderTarget* dstFbo, Array<GlRenderTargetPool*>& blendPool, const RenderRegion& vp, uint32_t voffset, uint32_t ioffset)
 {
-    if (!pBlurV) pBlurV = new GlProgram(EFFECT_VERTEX, GAUSSIAN_VERTICAL);
-    if (!pBlurH) pBlurH = new GlProgram(EFFECT_VERTEX, GAUSSIAN_HORIZONTAL);
+    if (!pBlurV) pBlurV = new GlProgram(GAUSSIAN_BLUR_VERTEX, GAUSSIAN_VERTICAL);
+    if (!pBlurH) pBlurH = new GlProgram(GAUSSIAN_BLUR_VERTEX, GAUSSIAN_HORIZONTAL);
     if (!pDropShadow) pDropShadow = new GlProgram(EFFECT_VERTEX, EFFECT_DROPSHADOW);
 
     // get current and intermidiate framebuffers

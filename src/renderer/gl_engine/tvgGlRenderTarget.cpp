@@ -43,12 +43,14 @@ void GlRenderTarget::init(uint32_t width, uint32_t height, GLint resolveId)
 
     GL_CHECK(glGenRenderbuffers(1, &mColorBuffer));
     GL_CHECK(glBindRenderbuffer(GL_RENDERBUFFER, mColorBuffer));
+    // GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, mWidth, mHeight));
     GL_CHECK(glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_RGBA8, mWidth, mHeight));
 
     GL_CHECK(glGenRenderbuffers(1, &mDepthStencilBuffer));
 
     GL_CHECK(glBindRenderbuffer(GL_RENDERBUFFER, mDepthStencilBuffer));
 
+    // GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, mWidth, mHeight));
     GL_CHECK(glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_DEPTH24_STENCIL8, mWidth, mHeight));
 
     GL_CHECK(glBindRenderbuffer(GL_RENDERBUFFER, 0));

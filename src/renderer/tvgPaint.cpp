@@ -320,6 +320,13 @@ Result Paint::scale(float factor) noexcept
 }
 
 
+Result Paint::scale(float x, float y) noexcept
+{
+    if (pImpl->scale(x, y)) return Result::Success;
+    return Result::InsufficientCondition;
+}
+
+
 Result Paint::translate(float x, float y) noexcept
 {
     if (pImpl->translate(x, y)) return Result::Success;

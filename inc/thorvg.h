@@ -408,6 +408,17 @@ struct TVG_API Paint
     Result scale(float factor) noexcept;
 
     /**
+     * @brief Sets the scale value of the object.
+     *
+     * @param[in] x The value of the horizontal scaling factor.
+     * @param[in] y The value of the vertical scaling factor.
+     *
+     * @retval Result::InsufficientCondition in case a custom transform is applied.
+     * @see Paint::transform()
+     */
+    Result scale(float x, float y) noexcept;
+
+    /**
      * @brief Sets the values by which the object is moved in a two-dimensional space.
      *
      * The origin of the coordinate system is in the upper-left corner of the canvas.

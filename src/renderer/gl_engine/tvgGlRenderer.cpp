@@ -28,6 +28,7 @@
 #include "tvgGlRenderTask.h"
 #include "tvgGlProgram.h"
 #include "tvgGlShaderSrc.h"
+#include "tvgTaskScheduler.h"
 
 
 /************************************************************************/
@@ -69,14 +70,6 @@ void GlRenderer::flush()
 
 void GlRenderer::currentContext()
 {
-#ifdef __EMSCRIPTEN__
-    auto targetContext = (EMSCRIPTEN_WEBGL_CONTEXT_HANDLE)mContext;
-    if (emscripten_webgl_get_current_context() != targetContext) {
-        emscripten_webgl_make_context_current(targetContext);
-    }
-#else
-    TVGERR("GL_ENGINE", "Maybe missing MakeCurrent() Call?");
-#endif
 }
 
 
@@ -438,6 +431,14 @@ void GlRenderer::drawPrimitive(GlShape& sdata, const Fill* fill, RenderUpdateFla
 
 void GlRenderer::drawClip(Array<RenderData>& clips)
 {
+    // 等待所有 clip 的细分任务完成（避免访问未准备好的 geometry 数据）
+    ARRAY_FOREACH(p, clips) {
+        auto clipShape = static_cast<GlShape*>(*p);
+        if (clipShape && clipShape->tessellationTask) {
+            clipShape->tessellationTask->done();
+        }
+    }
+
     Array<float> identityVertex(4 * 2);
     float left = -1.f;
     float top = 1.f;
@@ -925,6 +926,9 @@ bool GlRenderer::bounds(RenderData data, Point* pt4, const Matrix& m)
 {
     if (data) {
         auto sdata = static_cast<GlShape*>(data);
+        if (sdata->tessellationTask) {
+            sdata->tessellationTask->done();
+        }
         if (sdata->validStroke) {
             tvg::BBox bbox;
             bbox.init();
@@ -949,6 +953,9 @@ RenderRegion GlRenderer::region(RenderData data)
 {
     if (!data) return {};
     auto shape = reinterpret_cast<GlShape*>(data);
+    if (shape->tessellationTask) {
+        shape->tessellationTask->done();
+    }
     return shape->geometry.getBounds();
 }
 
@@ -1077,6 +1084,11 @@ bool GlRenderer::renderImage(void* data)
     auto sdata = static_cast<GlShape*>(data);
     if (!sdata) return false;
 
+    // 等待细分任务完成（如果需要，与 SwRenderer 保持一致）
+    if (sdata->tessellationTask) {
+        sdata->tessellationTask->done();
+    }
+
     if (currentPass()->isEmpty() || !sdata->validFill) return true;
 
     auto vp = currentPass()->getViewport();
@@ -1148,6 +1160,12 @@ bool GlRenderer::renderImage(void* data)
 bool GlRenderer::renderShape(RenderData data)
 {
     auto sdata = static_cast<GlShape*>(data);
+    
+    // 等待细分任务完成（如果需要，与 SwRenderer 保持一致）
+    if (sdata->tessellationTask) {
+        sdata->tessellationTask->done();
+    }
+    
     if (currentPass()->isEmpty() || (!sdata->validFill && !sdata->validStroke)) return true;
 
     auto bbox = sdata->geometry.viewport;
@@ -1191,10 +1209,28 @@ bool GlRenderer::renderShape(RenderData data)
     return true;
 }
 
+void GlShape::genTask(RenderUpdateFlag flags) {
+    // 等待之前的任务完成（如果存在）
+    clearTask();
+    tessellationTask = new GlShapeTask(this, flags);
+    // 提交到线程池
+    TaskScheduler::request(tessellationTask);
+}
+
+void GlShape::clearTask() {
+    if (tessellationTask) {
+        tessellationTask->done();
+        delete tessellationTask;
+        tessellationTask = nullptr;
+    }
+}
 
 void GlRenderer::dispose(RenderData data)
 {
     auto sdata = static_cast<GlShape*>(data);
+
+    // 等待并清理细分任务
+    sdata->clearTask();
 
     //dispose the non thread-safety resources on clearDisposes() call
     if (sdata->texId) {
@@ -1276,25 +1312,11 @@ RenderData GlRenderer::prepare(const RenderShape& rshape, RenderData data, const
 
     if (flags & RenderUpdateFlag::Path) sdata->geometry = GlGeometry();
     
+    // 先设置 geometry 的 matrix 和 viewport（无论是否异步都需要）
     sdata->geometry.matrix = transform;
     sdata->geometry.viewport = vport;
-    if (flags & (RenderUpdateFlag::Path | RenderUpdateFlag::Transform)) sdata->geometry.prepare(rshape);
     
-    //TODO: Please precisely update tessellation not to update only if the color is changed.
-    if (flags & (RenderUpdateFlag::Color | RenderUpdateFlag::Gradient | RenderUpdateFlag::Transform | RenderUpdateFlag::Path)) {
-        sdata->validFill = false;
-        float opacityMultiplier = 1.0f;
-        if (sdata->geometry.tesselateShape(*(sdata->rshape), &opacityMultiplier)) {
-            sdata->opacity *= opacityMultiplier;
-            sdata->validFill = true;
-        }
-    }
-
-    //TODO: Please precisely update tessellation not to update only if the color is changed.
-    if (flags & (RenderUpdateFlag::Color | RenderUpdateFlag::Stroke | RenderUpdateFlag::GradientStroke | RenderUpdateFlag::Transform | RenderUpdateFlag::Path)) {
-        sdata->validStroke = false;
-        if (sdata->geometry.tesselateStroke(*(sdata->rshape))) sdata->validStroke = true;
-    }
+    sdata->genTask(flags);
 
     if (flags & RenderUpdateFlag::Clip) {
         sdata->clips.clear();

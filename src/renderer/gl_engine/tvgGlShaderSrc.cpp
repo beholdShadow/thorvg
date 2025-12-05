@@ -972,8 +972,8 @@ void main()
 }
 )";
 
-const char* GAUSSIAN_VERTICAL = R"(
-uniform sampler2D uSrcTexture;
+const char* GAUSSIAN_BLUR_VERTEX = R"(
+layout(location = 0) in vec2 aLocation;
 layout(std140) uniform Gaussian {
     float sigma;
     float scale;
@@ -981,31 +981,61 @@ layout(std140) uniform Gaussian {
     float dummy0;
 } uGaussian;
 
-layout(std140) uniform Viewport {
-    vec4 vp;
-} uViewport;
-
-in vec2 vUV;
-out vec4 FragColor;
+out vec2 vUV;
+out float vWeights[128];  // Only stores weights for offset 0 to radius (half kernel)
+out int vRadius;
 
 float gaussian(float x, float sigma) {
+    if (sigma <= 0.0) return 0.0;
     float exponent = -x * x / (2.0 * sigma * sigma);
     return exp(exponent) / (sqrt(2.0 * 3.141592) * sigma);
 }
 
 void main()
 {
+    vUV = aLocation * 0.5 + 0.5;
+    gl_Position = vec4(aLocation, 0.0, 1.0);
+    
+    float sigma = uGaussian.sigma * uGaussian.scale;
+    int radius = int(uGaussian.extend);
+    vRadius = radius;
+    
+    // Precompute Gaussian kernel weights in vertex shader (only half due to symmetry)
+    // vWeights[i] stores weight for offset = i, where i ranges from 0 to radius
+    for (int i = 0; i < 128; ++i) {
+        if (i <= radius) {
+            vWeights[i] = gaussian(float(i), sigma);
+        } else {
+            vWeights[i] = 0.0;
+        }
+    }
+}
+)";
+
+const char* GAUSSIAN_VERTICAL = R"(
+uniform sampler2D uSrcTexture;
+layout(std140) uniform Viewport {
+    vec4 vp;
+} uViewport;
+
+in vec2 vUV;
+in float vWeights[128];
+in int vRadius;
+out vec4 FragColor;
+
+void main()
+{
     vec2 texelSize = 1.0 / vec2(textureSize(uSrcTexture, 0));
     vec4 colorSum = vec4(0.0);
-    float sigma = uGaussian.sigma * uGaussian.scale;
     float weightSum = 0.0;
-    int radius = int(uGaussian.extend);
     
-    for (int y = -radius; y <= radius; ++y) {
-        vec2 offset = vec2(0.0, float(y) * texelSize.y);
-        vec2 coord = vUV + offset;
+    // Use symmetry: gaussian(x) = gaussian(-x), so we only store weights for offset 0 to radius
+    for (int offset = -vRadius; offset <= vRadius; ++offset) {
+        vec2 offsetVec = vec2(0.0, float(offset) * texelSize.y);
+        vec2 coord = vUV + offsetVec;
         float pixCoord = uViewport.vp.y - coord.y / texelSize.y;
-        float weight = pixCoord < uViewport.vp.w ? gaussian(float(y), sigma) : 0.0;
+        int weightIndex = abs(offset);  // Use absolute value due to symmetry
+        float weight = pixCoord < uViewport.vp.w ? vWeights[weightIndex] : 0.0;
         colorSum += texture(uSrcTexture, coord) * weight;
         weightSum += weight;
     }
@@ -1014,40 +1044,31 @@ void main()
 } 
 )";
 
+
 const char* GAUSSIAN_HORIZONTAL = R"(
 uniform sampler2D uSrcTexture;
-layout(std140) uniform Gaussian {
-    float sigma;
-    float scale;
-    float extend;
-    float dummy0;
-} uGaussian;
-
 layout(std140) uniform Viewport {
     vec4 vp;
 } uViewport;
 
 in vec2 vUV;
+in float vWeights[128];
+in int vRadius;
 out vec4 FragColor;
-
-float gaussian(float x, float sigma) {
-    float exponent = -x * x / (2.0 * sigma * sigma);
-    return exp(exponent) / (sqrt(2.0 * 3.141592) * sigma);
-}
 
 void main()
 {
     vec2 texelSize = 1.0 / vec2(textureSize(uSrcTexture, 0));
     vec4 colorSum = vec4(0.0);
-    float sigma = uGaussian.sigma * uGaussian.scale;
     float weightSum = 0.0;
-    int radius = int(uGaussian.extend);
     
-    for (int y = -radius; y <= radius; ++y) {
-        vec2 offset = vec2(float(y) * texelSize.x, 0.0);
-        vec2 coord = vUV + offset;
+    // Use symmetry: gaussian(x) = gaussian(-x), so we only store weights for offset 0 to radius
+    for (int offset = -vRadius; offset <= vRadius; ++offset) {
+        vec2 offsetVec = vec2(float(offset) * texelSize.x, 0.0);
+        vec2 coord = vUV + offsetVec;
         float pixCoord = uViewport.vp.x + coord.x / texelSize.x;
-        float weight = pixCoord < uViewport.vp.z ? gaussian(float(y), sigma) : 0.0;
+        int weightIndex = abs(offset);  // Use absolute value due to symmetry
+        float weight = pixCoord < uViewport.vp.z ? vWeights[weightIndex] : 0.0;
         colorSum += texture(uSrcTexture, coord) * weight;
         weightSum += weight;
     }

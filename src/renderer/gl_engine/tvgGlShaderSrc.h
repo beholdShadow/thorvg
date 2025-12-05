@@ -76,6 +76,7 @@ extern const char* LUMINOSITY_BLEND_FRAG;
 extern const char* ADD_BLEND_FRAG;
 
 extern const char* EFFECT_VERTEX;
+extern const char* GAUSSIAN_BLUR_VERTEX;
 extern const char* GAUSSIAN_VERTICAL;
 extern const char* GAUSSIAN_HORIZONTAL;
 extern const char* EFFECT_DROPSHADOW;

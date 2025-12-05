@@ -27,6 +27,7 @@
 #include "tvgGl.h"
 #include "tvgRender.h"
 #include "tvgMath.h"
+#include "tvgTaskScheduler.h"
 
 constexpr float MIN_GL_STROKE_WIDTH = 1.0f;
 constexpr float MIN_GL_STROKE_ALPHA = 0.25f;
@@ -95,7 +96,7 @@ struct GlGeometry
     RenderPath optPath;  //optimal path
 };
 
-
+struct GlShapeTask;
 struct GlShape
 {
   const RenderShape* rshape = nullptr;
@@ -109,6 +110,9 @@ struct GlShape
   Array<RenderData> clips;
   bool validFill = false;
   bool validStroke = false;
+  GlShapeTask* tessellationTask = nullptr;  // 存储任务指针，用于等待完成
+  void genTask(RenderUpdateFlag flags);
+  void clearTask();
 };
 
 struct GlIntersector
@@ -151,5 +155,47 @@ struct GlCompositor : RenderCompositor
     GlCompositor(const RenderRegion& box, CompositionFlag flags) : bbox(box), flags(flags) {}
 };
 
+
+struct GlShapeTask : Task
+{
+    GlShape* sdata;
+    RenderUpdateFlag flags;
+    
+    GlShapeTask(GlShape* sdata, RenderUpdateFlag flags)
+        : sdata(sdata), flags(flags) {}
+    
+    void run(unsigned tid) override
+    {
+        // 在后台线程执行细分
+        // 使用 sdata->rshape、sdata->geometry.matrix 和 sdata->geometry.viewport
+        // 它们已经在 prepare() 中被正确设置
+        if (!sdata->rshape) return;
+        
+        if (flags & (RenderUpdateFlag::Path | RenderUpdateFlag::Transform)) {
+            sdata->geometry.prepare(*(sdata->rshape));
+        }
+        
+        // Fill 细分
+        if (flags & (RenderUpdateFlag::Color | RenderUpdateFlag::Gradient | 
+                     RenderUpdateFlag::Transform | RenderUpdateFlag::Path)) {
+            sdata->validFill = false;
+            float opacityMultiplier = 1.0f;
+            if (sdata->geometry.tesselateShape(*(sdata->rshape), &opacityMultiplier)) {
+                sdata->opacity *= opacityMultiplier;
+                sdata->validFill = true;
+            }
+        }
+        
+        // Stroke 细分
+        if (flags & (RenderUpdateFlag::Color | RenderUpdateFlag::Stroke | 
+                     RenderUpdateFlag::GradientStroke | RenderUpdateFlag::Transform | 
+                     RenderUpdateFlag::Path)) {
+            sdata->validStroke = false;
+            if (sdata->geometry.tesselateStroke(*(sdata->rshape))) {
+                sdata->validStroke = true;
+            }
+        }
+    }
+};
 
 #endif /* _TVG_GL_COMMON_H_ */

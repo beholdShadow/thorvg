@@ -83,6 +83,7 @@ enum class SvgNodeType
     Symbol,
     Filter,
     GaussianBlur,
+    DropShadow,
     Unknown
 };
 
@@ -419,6 +420,17 @@ struct SvgGaussianBlurNode
     bool edgeModeWrap;
 };
 
+struct SvgDropShadowNode
+{
+    float dx, dy;
+    float stdDevX, stdDevY;
+    SvgColor color;
+    float opacity;
+    Box box;
+    bool isPercentage[4];
+    bool hasBox;
+};
+
 struct SvgFilterNode
 {
     Box box;
@@ -566,6 +578,7 @@ struct SvgNode
         SvgTextNode text;
         SvgFilterNode filter;
         SvgGaussianBlurNode gaussianBlur;
+        SvgDropShadowNode dropShadow;
     } node;
     SvgXmlSpace xmlSpace = SvgXmlSpace::None;
     ~SvgNode();

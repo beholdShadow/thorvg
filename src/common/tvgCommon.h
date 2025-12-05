@@ -38,7 +38,7 @@
 #include <cstring>
 #include "config.h"
 #include "thorvg.h"
-
+#include "utils/logutils.h"
 using namespace std;
 using namespace tvg;
 
@@ -81,8 +81,8 @@ namespace tvg {
         constexpr auto LogBgColor = "\033[42m";  //bg green
         constexpr auto GreyColor = "\033[90m";   //grey
         constexpr auto ResetColors = "\033[0m";  //default
-        #define TVGERR(tag, fmt, ...) fprintf(stderr, "%s[E]%s %s" tag "%s (%s %d): %s" fmt "\n", ErrorBgColor, ResetColors, ErrorColor, GreyColor, __FILE__, __LINE__, ResetColors, ##__VA_ARGS__)
-        #define TVGLOG(tag, fmt, ...) fprintf(stdout, "%s[L]%s %s" tag "%s (%s %d): %s" fmt "\n", LogBgColor, ResetColors, LogColor, GreyColor, __FILE__, __LINE__, ResetColors, ##__VA_ARGS__)
+        #define TVGERR(tag, fmt, ...) OF_LOGE("%s[E]%s %s" tag "%s (%s %d): %s" fmt "\n", ErrorBgColor, ResetColors, ErrorColor, GreyColor, __FILE__, __LINE__, ResetColors, ##__VA_ARGS__)
+        #define TVGLOG(tag, fmt, ...) OF_LOGI("%s[L]%s %s" tag "%s (%s %d): %s" fmt "\n", LogBgColor, ResetColors, LogColor, GreyColor, __FILE__, __LINE__, ResetColors, ##__VA_ARGS__)
     #else
         #define TVGERR(...) do {} while(0)
         #define TVGLOG(...) do {} while(0)
